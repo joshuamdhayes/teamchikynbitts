@@ -17,7 +17,7 @@ spec:
     spec:
       containers:
         - name: app
-          image: paulbouwer/hello-kubernetes:1.5
+          image: 347788108263.dkr.ecr.us-east-1.amazonaws.com/teamchikynbitts-app:v1
           ports:
             - containerPort: 8080
           env:
