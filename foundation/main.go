@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/pulumi/pulumi-aws/sdk/v6/go/aws/budgets"
+	"github.com/pulumi/pulumi-aws/sdk/v6/go/aws/ecr"
 	"github.com/pulumi/pulumi-aws/sdk/v6/go/aws/iam"
 	"github.com/pulumi/pulumi/sdk/v3/go/pulumi"
 )
@@ -207,6 +208,19 @@ func main() {
 		if err != nil {
 			return err
 		}
+
+		// Create ECR Repository for Team Chikynbitts App
+		repo, err := ecr.NewRepository(ctx, "teamchikynbitts-app-repo", &ecr.RepositoryArgs{
+			Name:               pulumi.String("teamchikynbitts-app"),
+			ImageTagMutability: pulumi.String("MUTABLE"),
+			ImageScanningConfiguration: &ecr.RepositoryImageScanningConfigurationArgs{
+				ScanOnPush: pulumi.Bool(true),
+			},
+		})
+		if err != nil {
+			return err
+		}
+		ctx.Export("RepositoryURL", repo.RepositoryUrl)
 
 		return nil
 	})

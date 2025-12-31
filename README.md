@@ -12,6 +12,7 @@ The project is organized into three distinct layers, each representing a separat
 -   **IAM Users:** Manages access for team members (Joshua, Justin, Abby).
 -   **Budgets:** Enforces strict cost alerts ($50 warning, $75 critical) to keep the demo account cheap.
 -   **Security:** Enforces MFA policies for all administrators.
+-   **ECR:** Private container registry for storing application images.
 
 ### 2. `platform/` (Kubernetes Platform)
 **Owner:** Platform Engineers
@@ -55,7 +56,13 @@ The foundation layer requires a list of users to generate IAM access. **This fil
     ```bash
     pulumi up
     ```
-    *Output will provide the initial Access Keys and Secrets for each user.*
+    *Output will provide the initial Access Keys and Secrets for each user, and the ECR Repository URL.*
+
+    #### Using ECR (Registry)
+    To push images to the shared registry:
+    1.  **Login**: `aws ecr get-login-password | docker login --username AWS --password-stdin <RepositoryURL>`
+    2.  **Build**: `docker build -t <RepositoryURL>:v1 .`
+    3.  **Push**: `docker push <RepositoryURL>:v1`
 
 ### 2. Deploy the Platform
 When ready to work (and incur costs), spin up the platform.
