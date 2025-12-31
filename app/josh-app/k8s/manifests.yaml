@@ -1,0 +1,45 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: josh-app
+  namespace: default
+  labels:
+    app: josh-app
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: josh-app
+  template:
+    metadata:
+      labels:
+        app: josh-app
+    spec:
+      containers:
+        - name: app
+          image: 347788108263.dkr.ecr.us-east-1.amazonaws.com/josh-app:v1
+          ports:
+            - containerPort: 8080
+          env:
+            - name: PORT
+              value: "8080"
+          resources:
+            requests:
+              memory: "64Mi"
+              cpu: "250m"
+            limits:
+              memory: "128Mi"
+              cpu: "500m"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: josh-app
+  namespace: default
+spec:
+  selector:
+    app: josh-app
+  ports:
+    - port: 80
+      targetPort: 8080
+  type: LoadBalancer
