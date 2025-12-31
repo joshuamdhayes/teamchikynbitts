@@ -96,7 +96,7 @@ spec:
   source:
     repoURL: https://github.com/joshuamdhayes/teamchikynbitts
     targetRevision: HEAD
-    path: app/k8s
+    path: app/teamchikynbitts-app/k8s
   destination:
     server: https://kubernetes.default.svc
     namespace: default
