@@ -88,28 +88,30 @@ When ready to work (and incur costs), spin up the platform.
 
 ---
 
-## Cost Management
-**IMPORTANT:** This project uses AWS resources that cost money.
--   **EKS Control Plane:** ~$0.10/hour (~$73/month).
--   **EC2 Nodes:** Standard instance rates.
+## Tear Down & Cost Savings
 
-**To stop billing:**
-Always run `pulumi destroy` in the `platform/` directory when you are finished with your session.
+**IMPORTANT:** This project uses specific AWS resources that cost money (~$0.10/hour for the EKS Control Plane). To avoid unexpected charges, always tear down the platform when you are finished.
+
+### 1. Pre-Destroy Cleanup (Important)
+Kubernetes creates Cloud Resources (like LoadBalancers) that Pulumi might not track directly if created via ArgoCD. To prevent the destroy process from hanging:
+
+1.  **Delete all Services:**
+    ```bash
+    export KUBECONFIG=$PWD/kubeconfig.json
+    kubectl delete svc --all -A
+    ```
+    *Wait 1-2 minutes for AWS ELBs to disappear.*
+
+### 2. Destroy Platform
+Once the LoadBalancers are gone, destroy the cluster:
+
 ```bash
-    cd platform
-    pulumi destroy
+cd platform
+pulumi destroy
 ```
 
-### Troubleshooting
-**Stuck on `pulumi destroy`?**
-If the destroy process fails with `DependencyViolation` errors regarding Subnets, it is likely due to AWS LoadBalancers taking too long to delete.
-
-**Proactive Fix:** Run this command *before* destroying the stack to clear all LoadBalancers:
-```bash
-kubectl delete svc --all -A
-```
-
-**Fallback:** If you are already stuck:
-1.  Manually find the Load Balancers in the AWS Console (EC2 -> Load Balancers).
-2.  Delete any LBs associated with the VPC.
+### 3. Troubleshooting Hangs
+If `pulumi destroy` fails with `DependencyViolation` errors (usually related to VPC Subnets):
+1.  Go to the **AWS Console > EC2 > Load Balancers**.
+2.  Manually delete any remaining Load Balancers associated with your VPC.
 3.  Run `pulumi destroy` again.
