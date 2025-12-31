@@ -1,2 +1,0 @@
-# teamchikynbitts
-ChikynBitts EKS Practice
