@@ -104,6 +104,25 @@ spec:
     automated:
       prune: true
       selfHeal: true
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: josh-app
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/joshuamdhayes/teamchikynbitts
+    targetRevision: HEAD
+    path: app/josh-app/k8s
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: default
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
 `
 
 		_, err = yaml.NewConfigGroup(ctx, "teamchikynbitts-app", &yaml.ConfigGroupArgs{
