@@ -102,7 +102,14 @@ Always run `pulumi destroy` in the `platform/` directory when you are finished w
 
 ### Troubleshooting
 **Stuck on `pulumi destroy`?**
-If the destroy process fails with `DependencyViolation` errors regarding Subnets, it is likely due to AWS LoadBalancers taking too long to delete. 
+If the destroy process fails with `DependencyViolation` errors regarding Subnets, it is likely due to AWS LoadBalancers taking too long to delete.
+
+**Proactive Fix:** Run this command *before* destroying the stack to clear all LoadBalancers:
+```bash
+kubectl delete svc --all -A
+```
+
+**Fallback:** If you are already stuck:
 1.  Manually find the Load Balancers in the AWS Console (EC2 -> Load Balancers).
 2.  Delete any LBs associated with the VPC.
 3.  Run `pulumi destroy` again.
