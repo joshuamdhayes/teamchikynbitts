@@ -86,6 +86,22 @@ func main() {
 			return err
 		}
 
+		// Set Account Password Policy
+		_, err = iam.NewAccountPasswordPolicy(ctx, "password-policy", &iam.AccountPasswordPolicyArgs{
+			MinimumPasswordLength:      pulumi.Int(12),
+			RequireNumbers:             pulumi.Bool(true),
+			RequireSymbols:             pulumi.Bool(true),
+			RequireLowercaseCharacters: pulumi.Bool(true),
+			RequireUppercaseCharacters: pulumi.Bool(true),
+			AllowUsersToChangePassword: pulumi.Bool(true),
+			HardExpiry:                 pulumi.Bool(false),
+			MaxPasswordAge:             pulumi.Int(90),
+			PasswordReusePrevention:    pulumi.Int(3),
+		})
+		if err != nil {
+			return err
+		}
+
 		// Define MFA Enforcement Policy
 		mfaPolicyJSON := map[string]interface{}{
 			"Version": "2012-10-17",
