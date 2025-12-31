@@ -1,0 +1,38 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: teamchikynbitts-app
+  namespace: default
+  labels:
+    app: teamchikynbitts
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: teamchikynbitts
+  template:
+    metadata:
+      labels:
+        app: teamchikynbitts
+    spec:
+      containers:
+        - name: app
+          image: paulbouwer/hello-kubernetes:1.5
+          ports:
+            - containerPort: 8080
+          env:
+            - name: MESSAGE
+              value: "Hello Team Chikynbitts! (via ArgoCD)"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: teamchikynbitts-app
+  namespace: default
+spec:
+  selector:
+    app: teamchikynbitts
+  ports:
+    - port: 80
+      targetPort: 8080
+  type: LoadBalancer
