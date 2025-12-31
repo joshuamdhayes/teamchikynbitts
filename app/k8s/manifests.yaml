@@ -22,7 +22,7 @@ spec:
             - containerPort: 8080
           env:
             - name: MESSAGE
-              value: "Hello Team Chikynbitts v2.0! (via ArgoCD)"
+              value: "Hello Team Chikynbitts v3.0! (via ArgoCD)"
 ---
 apiVersion: v1
 kind: Service
