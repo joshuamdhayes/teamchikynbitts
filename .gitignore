@@ -1,2 +1,3 @@
 foundation/users.json
 platform/kubeconfig.json
+platform/get-app-url.sh
