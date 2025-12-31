@@ -23,6 +23,13 @@ spec:
           env:
             - name: MESSAGE
               value: "Hello Team Chikynbitts v3.0! (via ArgoCD)"
+          resources:
+            requests:
+              memory: "64Mi"
+              cpu: "250m"
+            limits:
+              memory: "128Mi"
+              cpu: "500m"
 ---
 apiVersion: v1
 kind: Service
