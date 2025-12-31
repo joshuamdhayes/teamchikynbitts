@@ -74,6 +74,11 @@ func main() {
 						"type": pulumi.String("LoadBalancer"),
 					},
 				},
+				"configs": pulumi.Map{
+					"cm": pulumi.Map{
+						"timeout.reconciliation": pulumi.String("60s"),
+					},
+				},
 			},
 		}, pulumi.Provider(k8sProvider))
 		if err != nil {
