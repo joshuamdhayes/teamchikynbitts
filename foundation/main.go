@@ -1,6 +1,8 @@
 package main
 
 import (
+	"encoding/json"
+	"os"
 	"strings"
 
 	"github.com/pulumi/pulumi-aws/sdk/v6/go/aws/budgets"
@@ -10,8 +12,19 @@ import (
 
 func main() {
 	pulumi.Run(func(ctx *pulumi.Context) error {
-		// Define Users
-		users := []string{"Joshua Hayes", "Justin Rouse", "Abby Adkins"}
+		// Read users from file
+		// Note: users.json should be in the same directory as the Pulumi program
+		fileContent, err := os.ReadFile("users.json")
+		if err != nil {
+			return err
+		}
+		var users []string
+		if err := json.Unmarshal(fileContent, &users); err != nil {
+			return err
+		}
+
+		var userNames []string
+
 		for _, name := range users {
 			// Sanitize name for resource name (spaces to dashes, lowercase)
 			resourceName := strings.ReplaceAll(strings.ToLower(name), " ", "-")
@@ -27,10 +40,127 @@ func main() {
 				return err
 			}
 			ctx.Export("UserARN-"+resourceName, user.Arn)
+
+			// Create Access Keys
+			key, err := iam.NewAccessKey(ctx, "key-"+resourceName, &iam.AccessKeyArgs{
+				User: user.Name,
+			})
+			if err != nil {
+				return err
+			}
+			ctx.Export("AccessKeyId-"+resourceName, key.ID())
+			ctx.Export("SecretAccessKey-"+resourceName, key.Secret)
+
+			// Collect user names for group membership
+			userNames = append(userNames, resourceName)
+		}
+
+		// Create SysAdmins Group
+		group, err := iam.NewGroup(ctx, "sysadmins", &iam.GroupArgs{
+			Name: pulumi.String("sysadmins"),
+		})
+		if err != nil {
+			return err
+		}
+
+		// Add Users to Group
+		for _, uName := range userNames {
+			_, err := iam.NewUserGroupMembership(ctx, "membership-"+uName, &iam.UserGroupMembershipArgs{
+				User: pulumi.String(uName),
+				Groups: pulumi.StringArray{
+					group.Name,
+				},
+			})
+			if err != nil {
+				return err
+			}
+		}
+
+		// Attach Administrator Access to Group
+		_, err = iam.NewGroupPolicyAttachment(ctx, "admin-access", &iam.GroupPolicyAttachmentArgs{
+			Group:     group.Name,
+			PolicyArn: pulumi.String("arn:aws:iam::aws:policy/AdministratorAccess"),
+		})
+		if err != nil {
+			return err
+		}
+
+		// Define MFA Enforcement Policy
+		mfaPolicyJSON := map[string]interface{}{
+			"Version": "2012-10-17",
+			"Statement": []map[string]interface{}{
+				{
+					"Sid":    "AllowViewAccountInfo",
+					"Effect": "Allow",
+					"Action": []string{
+						"iam:GetAccountPasswordPolicy",
+						"iam:GetAccountSummary",
+						"iam:ListVirtualMFADevices",
+					},
+					"Resource": "*",
+				},
+				{
+					"Sid":    "AllowManageOwnPasswordsAndMFA",
+					"Effect": "Allow",
+					"Action": []string{
+						"iam:ChangePassword",
+						"iam:GetUser",
+						"iam:CreateVirtualMFADevice",
+						"iam:EnableMFADevice",
+						"iam:ResyncMFADevice",
+						"iam:DeleteVirtualMFADevice",
+						"iam:ListMFADevices",
+					},
+					"Resource": []string{
+						"arn:aws:iam::*:user/${aws:username}",
+						"arn:aws:iam::*:mfa/${aws:username}",
+					},
+				},
+				{
+					"Sid":    "DenyAllExceptListedIfNoMFA",
+					"Effect": "Deny",
+					"NotAction": []string{
+						"iam:GetAccountPasswordPolicy",
+						"iam:GetAccountSummary",
+						"iam:ListVirtualMFADevices",
+						"iam:ChangePassword",
+						"iam:GetUser",
+						"iam:CreateVirtualMFADevice",
+						"iam:EnableMFADevice",
+						"iam:ResyncMFADevice",
+						"iam:DeleteVirtualMFADevice",
+						"iam:ListMFADevices",
+					},
+					"Resource": "*",
+					"Condition": map[string]interface{}{
+						"BoolIfExists": map[string]interface{}{
+							"aws:MultiFactorAuthPresent": "false",
+						},
+					},
+				},
+			},
+		}
+
+		mfaPolicy, err := iam.NewPolicy(ctx, "mfa-enforcement", &iam.PolicyArgs{
+			Name:        pulumi.String("EnforceMFA"),
+			Description: pulumi.String("Requires MFA for all actions except MFA setup."),
+			Policy:      pulumi.Any(mfaPolicyJSON),
+		})
+		if err != nil {
+			return err
+		}
+
+		// Attach MFA Policy to Group
+		_, err = iam.NewGroupPolicyAttachment(ctx, "mfa-enforcement-attach", &iam.GroupPolicyAttachmentArgs{
+			Group:     group.Name,
+			PolicyArn: mfaPolicy.Arn,
+		})
+		if err != nil {
+			return err
 		}
 
 		// Create Budget Alert: $50
-		_, err := budgets.NewBudget(ctx, "budget-50", &budgets.BudgetArgs{
+		_, err = budgets.NewBudget(ctx, "budget-50", &budgets.BudgetArgs{
 			BudgetType:      pulumi.String("COST"),
 			LimitAmount:     pulumi.String("50.0"),
 			LimitUnit:       pulumi.String("USD"),
