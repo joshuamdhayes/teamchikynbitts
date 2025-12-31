@@ -96,6 +96,13 @@ When ready to work (and incur costs), spin up the platform.
 **To stop billing:**
 Always run `pulumi destroy` in the `platform/` directory when you are finished with your session.
 ```bash
-cd platform
-pulumi destroy
+    cd platform
+    pulumi destroy
 ```
+
+### Troubleshooting
+**Stuck on `pulumi destroy`?**
+If the destroy process fails with `DependencyViolation` errors regarding Subnets, it is likely due to AWS LoadBalancers taking too long to delete. 
+1.  Manually find the Load Balancers in the AWS Console (EC2 -> Load Balancers).
+2.  Delete any LBs associated with the VPC.
+3.  Run `pulumi destroy` again.
