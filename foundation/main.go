@@ -236,7 +236,20 @@ func main() {
 		if err != nil {
 			return err
 		}
-		ctx.Export("RepositoryURL", repo.RepositoryUrl)
+		ctx.Export("RepositoryURL-teamchikynbitts-app", repo.RepositoryUrl)
+
+		// Create ECR Repository for Josh App
+		joshRepo, err := ecr.NewRepository(ctx, "josh-app-repo", &ecr.RepositoryArgs{
+			Name:               pulumi.String("josh-app"),
+			ImageTagMutability: pulumi.String("MUTABLE"),
+			ImageScanningConfiguration: &ecr.RepositoryImageScanningConfigurationArgs{
+				ScanOnPush: pulumi.Bool(true),
+			},
+		})
+		if err != nil {
+			return err
+		}
+		ctx.Export("RepositoryURL-josh-app", joshRepo.RepositoryUrl)
 
 		return nil
 	})
