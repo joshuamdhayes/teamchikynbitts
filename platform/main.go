@@ -32,7 +32,7 @@ func main() {
 		}
 
 		// 2. Network: Create a simple VPC
-		vpc, err := ec2x.NewVpc(ctx, "k3s-vpc", &ec2x.VpcArgs{
+		vpc, err := ec2x.NewVpc(ctx, "eks-vpc", &ec2x.VpcArgs{
 			AvailabilityZoneNames: []string{"us-east-1a", "us-east-1b"},
 		})
 		if err != nil {
@@ -104,18 +104,20 @@ func main() {
 		// 5. EC2 Instance
 		// Install K3s via UserData
 		userData := `#!/bin/bash
-curl -sfL https://get.k3s.io | sh -s - --write-kubeconfig-mode 644
+TOKEN=$(curl -X PUT "http://169.254.169.254/latest/api/token" -H "X-aws-ec2-metadata-token-ttl-seconds: 21600")
+PUBLIC_IP=$(curl -H "X-aws-ec2-metadata-token: $TOKEN" http://169.254.169.254/latest/meta-data/public-ipv4)
+curl -sfL https://get.k3s.io | sh -s - --write-kubeconfig-mode 644 --tls-san $PUBLIC_IP
 `
-		instance, err := ec2.NewInstance(ctx, "k3s-server", &ec2.InstanceArgs{
+		instance, err := ec2.NewInstance(ctx, "k3s-server-v3", &ec2.InstanceArgs{
 			Ami:                      pulumi.String(ubuntu.Id),
-			InstanceType:             pulumi.String("t3.medium"),
+			InstanceType:             pulumi.String("t3.small"),
 			VpcSecurityGroupIds:      pulumi.StringArray{sg.ID()},
 			SubnetId:                 vpc.PublicSubnetIds.Index(pulumi.Int(0)),
 			AssociatePublicIpAddress: pulumi.Bool(true),
 			KeyName:                  keyPair.KeyName,
 			UserData:                 pulumi.String(userData),
 			Tags: pulumi.StringMap{
-				"Name": pulumi.String("k3s-server"),
+				"Name": pulumi.String("k3s-server-v3"),
 			},
 		})
 		if err != nil {
@@ -135,7 +137,7 @@ curl -sfL https://get.k3s.io | sh -s - --write-kubeconfig-mode 644
 				User:       pulumi.String("ubuntu"),
 				PrivateKey: sshKey.PrivateKeyOpenssh,
 			},
-			Create: pulumi.String("cat /etc/rancher/k3s/k3s.yaml"),
+			Create: pulumi.String("for i in {1..20}; do if [ -f /etc/rancher/k3s/k3s.yaml ]; then cat /etc/rancher/k3s/k3s.yaml; exit 0; fi; sleep 5; done; echo 'Timed out waiting for kubeconfig'; exit 1"),
 		}, pulumi.DependsOn([]pulumi.Resource{instance}))
 		if err != nil {
 			return err
