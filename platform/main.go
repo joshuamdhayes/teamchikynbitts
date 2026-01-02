@@ -351,7 +351,7 @@ spec:
   interval: 1m0s
   url: https://github.com/joshuamdhayes/teamchikynbitts
   ref:
-    branch: main
+    branch: feat/k3s-flux
 `
 		// We need to wait for Flux CRDs to be installed by the Helm chart
 		gitRepo, err := yaml.NewConfigGroup(ctx, "flux-repo", &yaml.ConfigGroupArgs{
