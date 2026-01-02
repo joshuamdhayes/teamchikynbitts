@@ -69,6 +69,28 @@ The foundation layer requires a list of users to generate IAM access. **This fil
     ```
     *Output will provide the initial Access Keys and Secrets for each user, and the ECR Repository URL.*
 
+4.  **Onboarding Users & MFA**:
+    After deployment, you can retrieve temporary console passwords for yourself and your team:
+    ```bash
+    ./scripts/get-creds.sh
+    ```
+    Each user should then:
+    1.  Log in to the [AWS Console](https://signin.aws.amazon.com/console).
+    2.  Update their password when prompted.
+    3.  **Immediately** set up MFA (Multi-Factor Authentication) under "Security Credentials". We recommend using a Virtual MFA device (authenticator app) or a hardware key.
+
+5.  **AWS CLI MFA Setup**:
+    To use the AWS CLI with MFA without manually managing session tokens, run the following helper script:
+    ```bash
+    ./scripts/setup-mfa-profile.sh
+    ```
+    This script will configure a named profile (`teamchikynbitts`) that automatically prompts for your MFA code and manages temporary credentials.
+    
+    To activate the profile in your current shell:
+    ```bash
+    export AWS_PROFILE=teamchikynbitts
+    ```
+
     #### Using ECR (Registry)
     To push images to the shared registry:
     1.  **Login**: `aws ecr get-login-password | docker login --username AWS --password-stdin <RepositoryURL>`
