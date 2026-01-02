@@ -166,7 +166,7 @@ PUBLIC_IP=$(curl -H "X-aws-ec2-metadata-token: $TOKEN" http://169.254.169.254/la
 curl -sfL https://get.k3s.io | sh -s - --write-kubeconfig-mode 644 --tls-san $PUBLIC_IP --tls-san %s
 `, eip.PublicIp)
 
-		instance, err := ec2.NewInstance(ctx, "k3s-server-v5", &ec2.InstanceArgs{
+		instance, err := ec2.NewInstance(ctx, "k3s-server-v6", &ec2.InstanceArgs{
 			Ami:                      pulumi.String(ubuntu.Id),
 			InstanceType:             pulumi.String("t3.small"),
 			VpcSecurityGroupIds:      pulumi.StringArray{sg.ID()},
@@ -176,7 +176,7 @@ curl -sfL https://get.k3s.io | sh -s - --write-kubeconfig-mode 644 --tls-san $PU
 			KeyName:                  keyPair.KeyName,
 			UserData:                 userData,
 			Tags: pulumi.StringMap{
-				"Name": pulumi.String("k3s-server-v5"),
+				"Name": pulumi.String("k3s-server-v6"),
 			},
 		})
 		if err != nil {
@@ -198,7 +198,7 @@ curl -sfL https://get.k3s.io | sh -s - --write-kubeconfig-mode 644 --tls-san $PU
 		// We use a remote command to CAT the file.
 		// We depend on the instance enabling SSH, which takes a moment.
 		// The Connection uses the Public IP.
-		kubeconfigCmd, err := remote.NewCommand(ctx, "get-kubeconfig", &remote.CommandArgs{
+		kubeconfigCmd, err := remote.NewCommand(ctx, "get-kubeconfig-v2", &remote.CommandArgs{
 			Connection: &remote.ConnectionArgs{
 				Host:       eip.PublicIp, // Use EIP for connection
 				User:       pulumi.String("ubuntu"),
@@ -226,7 +226,7 @@ curl -sfL https://get.k3s.io | sh -s - --write-kubeconfig-mode 644 --tls-san $PU
 		ctx.Export("privateKey", sshKey.PrivateKeyOpenssh)
 
 		// 7. Kubernetes Provider
-		k8sProvider, err := kubernetes.NewProvider(ctx, "k3s-provider", &kubernetes.ProviderArgs{
+		k8sProvider, err := kubernetes.NewProvider(ctx, "k3s-provider-v2", &kubernetes.ProviderArgs{
 			Kubeconfig: kubeconfig,
 		})
 		if err != nil {
