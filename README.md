@@ -96,29 +96,12 @@ When ready to work (and incur costs), spin up the platform.
     ```
 
 ### 4. Accessing Applications
-The cluster uses `Traefik` Ingress with Host-based routing. To access the applications, you must use the instance's **Public IP** with the correct **Host Header**.
+The cluster uses `Traefik` Ingress with `nip.io` domains (magic DNS) to route traffic. You can access the apps directly in your browser:
 
-1.  Get the Public IP:
-    ```bash
-    export PUBLIC_IP=$(pulumi stack output publicIP)
-    echo $PUBLIC_IP
-    ```
+*   **Josh App**: `http://josh-app.44.213.121.222.nip.io`
+*   **Team App**: `http://team-app.44.213.121.222.nip.io`
 
-2.  **Access via Curl**:
-    ```bash
-    # Josh App
-    curl -H "Host: josh-app.local" http://$PUBLIC_IP
-    
-    # Team App
-    curl -H "Host: team-app.local" http://$PUBLIC_IP
-    ```
-
-3.  **Access via Browser**:
-    Add the IP to your `/etc/hosts` file:
-    ```
-    <PUBLIC_IP> josh-app.local team-app.local
-    ```
-    Then visit `http://josh-app.local` or `http://team-app.local` in your browser.
+*Note: If the EC2 instance is replaced, the IP will change, and these manifests/URLs will need to be updated.*
 
 ---
 
