@@ -7,3 +7,4 @@ kubeconfig.yaml
 kubeconfig.*.yaml
 agent-config.json
 .agent
+scripts/git-as-bot.sh
