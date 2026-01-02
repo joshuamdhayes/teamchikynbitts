@@ -143,14 +143,30 @@ func main() {
 			return err
 		}
 
-		// 5. EC2 Instance
+		// 5. Elastic IP (Pre-allocate for Stable Access)
+		// We create this *before* the instance so we can pass the IP to the K3s installer
+		eip, err := ec2.NewEip(ctx, "k3s-eip", &ec2.EipArgs{
+			Vpc: pulumi.Bool(true),
+			Tags: pulumi.StringMap{
+				"Name": pulumi.String("k3s-eip"),
+			},
+		})
+		if err != nil {
+			return err
+		}
+
+		ctx.Export("publicIP", eip.PublicIp)
+
+		// 6. EC2 Instance
 		// Install K3s via UserData (with IMDSv2 token)
-		userData := `#!/bin/bash
+		// We explicitly add the EIP to the TLS SAN list.
+		userData := pulumi.Sprintf(`#!/bin/bash
 TOKEN=$(curl -X PUT "http://169.254.169.254/latest/api/token" -H "X-aws-ec2-metadata-token-ttl-seconds: 21600")
 PUBLIC_IP=$(curl -H "X-aws-ec2-metadata-token: $TOKEN" http://169.254.169.254/latest/meta-data/public-ipv4)
-curl -sfL https://get.k3s.io | sh -s - --write-kubeconfig-mode 644 --tls-san $PUBLIC_IP
-`
-		instance, err := ec2.NewInstance(ctx, "k3s-server-v4", &ec2.InstanceArgs{
+curl -sfL https://get.k3s.io | sh -s - --write-kubeconfig-mode 644 --tls-san $PUBLIC_IP --tls-san %s
+`, eip.PublicIp)
+
+		instance, err := ec2.NewInstance(ctx, "k3s-server-v5", &ec2.InstanceArgs{
 			Ami:                      pulumi.String(ubuntu.Id),
 			InstanceType:             pulumi.String("t3.small"),
 			VpcSecurityGroupIds:      pulumi.StringArray{sg.ID()},
@@ -158,43 +174,56 @@ curl -sfL https://get.k3s.io | sh -s - --write-kubeconfig-mode 644 --tls-san $PU
 			IamInstanceProfile:       instanceProfile.Name,
 			AssociatePublicIpAddress: pulumi.Bool(true),
 			KeyName:                  keyPair.KeyName,
-			UserData:                 pulumi.String(userData),
+			UserData:                 userData,
 			Tags: pulumi.StringMap{
-				"Name": pulumi.String("k3s-server-v4"),
+				"Name": pulumi.String("k3s-server-v5"),
 			},
 		})
 		if err != nil {
 			return err
 		}
 
-		ctx.Export("publicIP", instance.PublicIp)
+		// Associate the EIP with the new instance
+		_, err = ec2.NewEipAssociation(ctx, "k3s-eip-assoc", &ec2.EipAssociationArgs{
+			InstanceId:   instance.ID(),
+			AllocationId: eip.AllocationId,
+		})
+		if err != nil {
+			return err
+		}
+
 		ctx.Export("privateKey", sshKey.PrivateKeyOpenssh)
 
-		// 6. Retrieve Kubeconfig
+		// 7. Retrieve Kubeconfig
 		// We use a remote command to CAT the file.
 		// We depend on the instance enabling SSH, which takes a moment.
 		// The Connection uses the Public IP.
 		kubeconfigCmd, err := remote.NewCommand(ctx, "get-kubeconfig", &remote.CommandArgs{
 			Connection: &remote.ConnectionArgs{
-				Host:       instance.PublicIp,
+				Host:       eip.PublicIp, // Use EIP for connection
 				User:       pulumi.String("ubuntu"),
 				PrivateKey: sshKey.PrivateKeyOpenssh,
 			},
 			Create: pulumi.String("for i in {1..20}; do if [ -f /etc/rancher/k3s/k3s.yaml ]; then cat /etc/rancher/k3s/k3s.yaml; exit 0; fi; sleep 5; done; echo 'Timed out waiting for kubeconfig'; exit 1"),
+			Triggers: pulumi.Array{
+				instance.ID(),
+			},
 		}, pulumi.DependsOn([]pulumi.Resource{instance}))
 		if err != nil {
 			return err
 		}
 
-		// Fix the Kubeconfig: Replace 127.0.0.1 with Public IP
-		kubeconfig := pulumi.All(kubeconfigCmd.Stdout, instance.PublicIp).ApplyT(
+		// Fix the Kubeconfig: Replace 127.0.0.1 with Public IP (EIP)
+		kubeconfig := pulumi.All(kubeconfigCmd.Stdout, eip.PublicIp).ApplyT(
 			func(args []interface{}) (string, error) {
 				kconf := args[0].(string)
 				ip := args[1].(string)
 				return strings.Replace(kconf, "127.0.0.1", ip, -1), nil
 			}).(pulumi.StringOutput)
 
-		ctx.Export("kubeconfig", kubeconfig)
+		ctx.Export("kubeconfig", pulumi.ToSecret(kubeconfig))
+		ctx.Export("publicIP", eip.PublicIp)
+		ctx.Export("privateKey", sshKey.PrivateKeyOpenssh)
 
 		// 7. Kubernetes Provider
 		k8sProvider, err := kubernetes.NewProvider(ctx, "k3s-provider", &kubernetes.ProviderArgs{

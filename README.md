@@ -98,8 +98,8 @@ When ready to work (and incur costs), spin up the platform.
 ### 4. Accessing Applications
 The cluster uses `Traefik` Ingress with `nip.io` domains (magic DNS) to route traffic. You can access the apps directly in your browser:
 
-*   **Josh App**: `http://josh-app.44.213.121.222.nip.io`
-*   **Team App**: `http://team-app.44.213.121.222.nip.io`
+*   **Josh App**: `http://josh-app.34.235.5.146.nip.io`
+*   **Team App**: `http://team-app.34.235.5.146.nip.io`
 
 *Note: If the EC2 instance is replaced, the IP will change, and these manifests/URLs will need to be updated.*
 

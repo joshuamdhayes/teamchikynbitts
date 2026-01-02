@@ -66,7 +66,7 @@ metadata:
   namespace: default
 spec:
   rules:
-    - host: josh-app.44.213.121.222.nip.io
+    - host: josh-app.34.235.5.146.nip.io
       http:
         paths:
           - path: /
