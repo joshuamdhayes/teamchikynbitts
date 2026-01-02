@@ -218,7 +218,129 @@ curl -sfL https://get.k3s.io | sh -s - --write-kubeconfig-mode 644 --tls-san $PU
 			return err
 		}
 
-		// 9. Flux GitRepository
+		// 10. ECR Credentials CronJob
+		// Since we are using K3s, we need to explicitly refresh the ECR token in a Secret
+		// so the Kubelet can pull images. We use a CronJob for this.
+		ecrCronYAML := `apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: ecr-refresher
+  namespace: default
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: ecr-refresher
+  namespace: default
+rules:
+- apiGroups: [""]
+  resources: ["secrets", "serviceaccounts"]
+  verbs: ["get", "delete", "create", "patch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: ecr-refresher
+  namespace: default
+subjects:
+- kind: ServiceAccount
+  name: ecr-refresher
+  namespace: default
+roleRef:
+  kind: Role
+  name: ecr-refresher
+  apiGroup: rbac.authorization.k8s.io
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: ecr-refresher
+  namespace: default
+spec:
+  schedule: "0 */6 * * *" # Every 6 hours
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 1
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          serviceAccountName: ecr-refresher
+          containers:
+          - name: refresher
+            image: amazon/aws-cli:latest
+            command:
+            - /bin/bash
+            - -c
+            - |
+              # Install kubectl
+              curl -o kubectl https://s3.us-west-2.amazonaws.com/amazon-eks/1.27.1/2023-04-19/bin/linux/amd64/kubectl
+              chmod +x kubectl
+              mv kubectl /usr/bin/
+              
+              # Get ECR Token
+              echo "Getting ECR Token..."
+              TOKEN=$(aws ecr get-login-password --region us-east-1)
+              REGISTRY="347788108263.dkr.ecr.us-east-1.amazonaws.com"
+              
+              # Delete existing secret (ignore if not exists)
+              kubectl delete secret regcred --ignore-not-found
+              
+              # Create new secret
+              kubectl create secret docker-registry regcred \
+                --docker-server=$REGISTRY \
+                --docker-username=AWS \
+                --docker-password=$TOKEN
+                
+              # Patch ServiceAccount to use this secret for pulls
+              kubectl patch serviceaccount default -p '{"imagePullSecrets":[{"name":"regcred"}]}'
+              
+              echo "Done!"
+          restartPolicy: Never
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: ecr-refresher-init
+  namespace: default
+spec:
+  template:
+    spec:
+      serviceAccountName: ecr-refresher
+      containers:
+      - name: refresher
+        image: amazon/aws-cli:latest
+        command:
+        - /bin/bash
+        - -c
+        - |
+          # Install kubectl
+          curl -o kubectl https://s3.us-west-2.amazonaws.com/amazon-eks/1.27.1/2023-04-19/bin/linux/amd64/kubectl
+          chmod +x kubectl
+          mv kubectl /usr/bin/
+          
+          # Get ECR Token
+          echo "Getting ECR Token..."
+          TOKEN=$(aws ecr get-login-password --region us-east-1)
+          REGISTRY="347788108263.dkr.ecr.us-east-1.amazonaws.com"
+          
+          kubectl delete secret regcred --ignore-not-found
+          kubectl create secret docker-registry regcred \
+            --docker-server=$REGISTRY \
+            --docker-username=AWS \
+            --docker-password=$TOKEN
+            
+          kubectl patch serviceaccount default -p '{"imagePullSecrets":[{"name":"regcred"}]}'
+          echo "Done!"
+      restartPolicy: Never
+`
+		_, err = yaml.NewConfigGroup(ctx, "ecr-cron", &yaml.ConfigGroupArgs{
+			YAML: []string{ecrCronYAML},
+		}, pulumi.Provider(k8sProvider))
+		if err != nil {
+			return err
+		}
+
+		// 11. Flux GitRepository
 		// The Source for our Apps
 		repoYAML := `apiVersion: source.toolkit.fluxcd.io/v1
 kind: GitRepository
