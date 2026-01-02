@@ -57,4 +57,22 @@ spec:
   ports:
     - port: 80
       targetPort: 8080
-  type: LoadBalancer
+  type: ClusterIP
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: teamchikynbitts-app
+  namespace: default
+spec:
+  rules:
+    - host: team-app.local
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: teamchikynbitts-app
+                port:
+                  number: 80

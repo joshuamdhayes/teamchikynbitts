@@ -3,9 +3,11 @@ module teamchikynbitts
 go 1.24.7
 
 require (
+	github.com/pulumi/pulumi-aws/sdk/v6 v6.83.2
 	github.com/pulumi/pulumi-awsx/sdk/v2 v2.22.0
-	github.com/pulumi/pulumi-eks/sdk/v3 v3.9.1
+	github.com/pulumi/pulumi-command/sdk v1.1.3
 	github.com/pulumi/pulumi-kubernetes/sdk/v4 v4.24.1
+	github.com/pulumi/pulumi-tls/sdk/v4 v4.11.1
 	github.com/pulumi/pulumi/sdk/v3 v3.214.0
 )
 
@@ -60,7 +62,6 @@ require (
 	github.com/pkg/term v1.1.0 // indirect
 	github.com/pulumi/appdash v0.0.0-20231130102222-75f619a67231 // indirect
 	github.com/pulumi/esc v0.17.0 // indirect
-	github.com/pulumi/pulumi-aws/sdk/v6 v6.66.2 // indirect
 	github.com/pulumi/pulumi-docker-build/sdk/go/dockerbuild v0.0.3 // indirect
 	github.com/pulumi/pulumi-docker/sdk/v4 v4.5.8 // indirect
 	github.com/rivo/uniseg v0.4.7 // indirect

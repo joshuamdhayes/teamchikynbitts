@@ -1,6 +1,6 @@
 # Team Chikynbitts Infrastructure
 
-This repository manages the AWS infrastructure and Kubernetes/GitOps environment for Team Chikynbitts. It is designed as a learning platform for Kubernetes (EKS) and ArgoCD deployments, structured using Platform Engineering best practices.
+This repository manages the AWS infrastructure and Kubernetes/GitOps environment for Team Chikynbitts. It is designed as a learning platform for Kubernetes (**K3s**) and **Flux** GitOps deployments, structured using Platform Engineering best practices.
 
 ## Project Structure
 
@@ -16,17 +16,17 @@ The project is organized into three distinct layers, each representing a separat
 
 ### 2. `platform/` (Kubernetes Platform)
 **Owner:** Platform Engineers
-**Purpose:** Provisions the "Justin-in-Time" Kubernetes cluster.
--   **EKS:** Defines a cost-effective EKS cluster (`t3.small` nodes).
--   **ArgoCD:** Bootstraps ArgoCD for GitOps deployment.
--   **Networking:** Custom VPC configuration.
+**Purpose:** Provisions the "Lightweight" Kubernetes cluster.
+-   **K3s**: Self-managed K3s cluster on a single `t3.small` EC2 instance (Ubuntu 24.04).
+-   **Flux:** GitOps controller for continuous delivery (replaced ArgoCD).
+-   **Networking**: Custom VPC configuration with Public IP access.
 
 ### 3. `app/` (Application)
 **Owner:** Developers
 **Purpose:** The source code and manifests for the business application.
 -   **Src:** A simple Go web server.
--   **K8s:** Kubernetes Deployment and Service manifests.
--   **GitOps:** ArgoCD syncs this directory to the cluster.
+-   **K8s:** Kubernetes Deployment, Service (ClusterIP), and Ingress manifests.
+-   **GitOps:** Flux syncs this directory to the cluster.
 
 ---
 
@@ -75,43 +75,59 @@ When ready to work (and incur costs), spin up the platform.
     ```bash
     pulumi up
     ```
-    *This takes ~15-20 minutes.*
+    *This takes ~2-5 minutes.*
 
 ### 3. Access & Verify
 -   **Kubeconfig**: Pulumi will export the kubeconfig. Save it to access the cluster:
     ```bash
-    pulumi stack output kubeconfig > kubeconfig.json
-    export KUBECONFIG=$PWD/kubeconfig.json
+    pulumi stack output kubeconfig --show-secrets > kubeconfig.yaml
+    export KUBECONFIG=$PWD/kubeconfig.yaml
     kubectl get nodes
     ```
--   **ArgoCD**: Access the ArgoCD UI via the LoadBalancer URL provided by `kubectl get svc -n argocd`.
+-   **SSH Access**: Retrieve your private key if needed for debugging:
+    ```bash
+    pulumi stack output privateKey --show-secrets > key.pem
+    chmod 600 key.pem
+    ssh -i key.pem ubuntu@$(pulumi stack output publicIP)
+    ```
+-   **Flux**: Check the status of GitOps sync:
+    ```bash
+    kubectl get kustomizations -n flux-system
+    ```
+
+### 4. Accessing Applications
+The cluster uses `Traefik` Ingress with Host-based routing. To access the applications, you must use the instance's **Public IP** with the correct **Host Header**.
+
+1.  Get the Public IP:
+    ```bash
+    export PUBLIC_IP=$(pulumi stack output publicIP)
+    echo $PUBLIC_IP
+    ```
+
+2.  **Access via Curl**:
+    ```bash
+    # Josh App
+    curl -H "Host: josh-app.local" http://$PUBLIC_IP
+    
+    # Team App
+    curl -H "Host: team-app.local" http://$PUBLIC_IP
+    ```
+
+3.  **Access via Browser**:
+    Add the IP to your `/etc/hosts` file:
+    ```
+    <PUBLIC_IP> josh-app.local team-app.local
+    ```
+    Then visit `http://josh-app.local` or `http://team-app.local` in your browser.
 
 ---
 
 ## Tear Down & Cost Savings
 
-**IMPORTANT:** This project uses specific AWS resources that cost money (~$0.10/hour for the EKS Control Plane). To avoid unexpected charges, always tear down the platform when you are finished.
-
-### 1. Pre-Destroy Cleanup (Important)
-Kubernetes creates Cloud Resources (like LoadBalancers) that Pulumi might not track directly if created via ArgoCD. To prevent the destroy process from hanging:
-
-1.  **Delete all Services:**
-    ```bash
-    export KUBECONFIG=$PWD/kubeconfig.json
-    kubectl delete svc --all -A
-    ```
-    *Wait 1-2 minutes for AWS ELBs to disappear.*
-
-### 2. Destroy Platform
-Once the LoadBalancers are gone, destroy the cluster:
+**IMPORTANT:** Always tear down the platform when finished to stop the EC2 charges.
 
 ```bash
 cd platform
 pulumi destroy
 ```
-
-### 3. Troubleshooting Hangs
-If `pulumi destroy` fails with `DependencyViolation` errors (usually related to VPC Subnets):
-1.  Go to the **AWS Console > EC2 > Load Balancers**.
-2.  Manually delete any remaining Load Balancers associated with your VPC.
-3.  Run `pulumi destroy` again.
+Since K3s uses a simplified LoadBalancer (ServiceLB) on the node itself, there are no AWS ELBs to clean up manually. `pulumi destroy` will terminate the EC2 instance and stop all costs.
