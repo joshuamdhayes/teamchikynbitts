@@ -123,6 +123,7 @@ func main() {
 						"iam:GetAccountPasswordPolicy",
 						"iam:GetAccountSummary",
 						"iam:ListVirtualMFADevices",
+						"iam:ListUsers",
 					},
 					"Resource": "*",
 				},
@@ -157,6 +158,7 @@ func main() {
 						"iam:ResyncMFADevice",
 						"iam:DeleteVirtualMFADevice",
 						"iam:ListMFADevices",
+						"iam:ListUsers",
 					},
 					"Resource": "*",
 					"Condition": map[string]interface{}{
