@@ -4,3 +4,5 @@ platform/get-app-url.sh
 *.pem
 kubeconfig.yaml
 kubeconfig.*.yaml
+agent-config.json
+.agent

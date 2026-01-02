@@ -13,6 +13,7 @@ import (
 
 func main() {
 	pulumi.Run(func(ctx *pulumi.Context) error {
+
 		// Read users from file
 		// Note: users.json should be in the same directory as the Pulumi program
 		fileContent, err := os.ReadFile("users.json")
@@ -21,6 +22,16 @@ func main() {
 		}
 		var users []string
 		if err := json.Unmarshal(fileContent, &users); err != nil {
+			return err
+		}
+
+		// Read bots from file
+		botsFileContent, err := os.ReadFile("bots.json")
+		if err != nil {
+			return err
+		}
+		var bots []string
+		if err := json.Unmarshal(botsFileContent, &bots); err != nil {
 			return err
 		}
 
@@ -64,6 +75,70 @@ func main() {
 
 			// Collect user names for group membership
 			userNames = append(userNames, resourceName)
+		}
+
+		var botNames []string
+
+		for _, name := range bots {
+			// Sanitize name for resource name (spaces to dashes, lowercase)
+			resourceName := strings.ReplaceAll(strings.ToLower(name), " ", "-")
+			resourceName = "bot-" + resourceName
+
+			user, err := iam.NewUser(ctx, resourceName, &iam.UserArgs{
+				Name: pulumi.String(resourceName),
+				Tags: pulumi.StringMap{
+					"ManagedBy": pulumi.String("Pulumi"),
+					"Team":      pulumi.String("TeamChikynbitts"),
+					"Type":      pulumi.String("Bot"),
+				},
+			})
+			if err != nil {
+				return err
+			}
+			ctx.Export("UserARN-"+resourceName, user.Arn)
+
+			// Create Access Keys
+			key, err := iam.NewAccessKey(ctx, "key-"+resourceName, &iam.AccessKeyArgs{
+				User: user.Name,
+			})
+			if err != nil {
+				return err
+			}
+			ctx.Export("AccessKeyId-"+resourceName, key.ID())
+			ctx.Export("SecretAccessKey-"+resourceName, key.Secret)
+
+			// Collect bot names for group membership
+			botNames = append(botNames, resourceName)
+		}
+
+		// Create Bots Group
+		botsGroup, err := iam.NewGroup(ctx, "bots", &iam.GroupArgs{
+			Name: pulumi.String("bots"),
+		})
+		if err != nil {
+			return err
+		}
+
+		// Add Bots to Group
+		for _, bName := range botNames {
+			_, err := iam.NewUserGroupMembership(ctx, "membership-"+bName, &iam.UserGroupMembershipArgs{
+				User: pulumi.String(bName),
+				Groups: pulumi.StringArray{
+					botsGroup.Name,
+				},
+			})
+			if err != nil {
+				return err
+			}
+		}
+
+		// Attach Administrator Access to Bots Group
+		_, err = iam.NewGroupPolicyAttachment(ctx, "bot-admin-access", &iam.GroupPolicyAttachmentArgs{
+			Group:     botsGroup.Name,
+			PolicyArn: pulumi.String("arn:aws:iam::aws:policy/AdministratorAccess"),
+		})
+		if err != nil {
+			return err
 		}
 
 		// Create SysAdmins Group
