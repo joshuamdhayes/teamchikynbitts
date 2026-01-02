@@ -261,26 +261,24 @@ metadata:
   namespace: default
 ---
 apiVersion: rbac.authorization.k8s.io/v1
-kind: Role
+kind: ClusterRole
 metadata:
   name: ecr-refresher
-  namespace: default
 rules:
 - apiGroups: [""]
   resources: ["secrets", "serviceaccounts"]
   verbs: ["get", "delete", "create", "patch"]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
-kind: RoleBinding
+kind: ClusterRoleBinding
 metadata:
   name: ecr-refresher
-  namespace: default
 subjects:
 - kind: ServiceAccount
   name: ecr-refresher
   namespace: default
 roleRef:
-  kind: Role
+  kind: ClusterRole
   name: ecr-refresher
   apiGroup: rbac.authorization.k8s.io
 ---
@@ -316,16 +314,17 @@ spec:
               REGISTRY="347788108263.dkr.ecr.us-east-1.amazonaws.com"
               
               # Delete existing secret (ignore if not exists)
-              kubectl delete secret regcred --ignore-not-found
-              
-              # Create new secret
-              kubectl create secret docker-registry regcred \
-                --docker-server=$REGISTRY \
-                --docker-username=AWS \
-                --docker-password=$TOKEN
-                
-              # Patch ServiceAccount to use this secret for pulls
-              kubectl patch serviceaccount default -p '{"imagePullSecrets":[{"name":"regcred"}]}'
+              # Update secrets in all app namespaces
+              NAMESPACES=("default" "josh-app" "teamchikynbitts-app")
+              for NS in "${NAMESPACES[@]}"; do
+                echo "Updating secret in namespace $NS"
+                kubectl delete secret regcred -n $NS --ignore-not-found
+                kubectl create secret docker-registry regcred -n $NS \
+                  --docker-server=$REGISTRY \
+                  --docker-username=AWS \
+                  --docker-password=$TOKEN
+                kubectl patch serviceaccount default -n $NS -p '{"imagePullSecrets":[{"name":"regcred"}]}' || echo "SA not found in $NS, skipping patch"
+              done
               
               echo "Done!"
           restartPolicy: Never
@@ -356,13 +355,16 @@ spec:
           TOKEN=$(aws ecr get-login-password --region us-east-1)
           REGISTRY="347788108263.dkr.ecr.us-east-1.amazonaws.com"
           
-          kubectl delete secret regcred --ignore-not-found
-          kubectl create secret docker-registry regcred \
-            --docker-server=$REGISTRY \
-            --docker-username=AWS \
-            --docker-password=$TOKEN
-            
-          kubectl patch serviceaccount default -p '{"imagePullSecrets":[{"name":"regcred"}]}'
+          NAMESPACES=("default" "josh-app" "teamchikynbitts-app")
+          for NS in "${NAMESPACES[@]}"; do
+            echo "Updating secret in namespace $NS"
+            kubectl delete secret regcred -n $NS --ignore-not-found
+            kubectl create secret docker-registry regcred -n $NS \
+              --docker-server=$REGISTRY \
+              --docker-username=AWS \
+              --docker-password=$TOKEN
+            kubectl patch serviceaccount default -n $NS -p '{"imagePullSecrets":[{"name":"regcred"}]}' || echo "SA not found in $NS, skipping patch"
+          done
           echo "Done!"
       restartPolicy: Never
 `
@@ -403,7 +405,7 @@ metadata:
   namespace: flux-system
 spec:
   interval: 1m0s
-  targetNamespace: default
+  targetNamespace: teamchikynbitts-app
   sourceRef:
     kind: GitRepository
     name: teamchikynbitts-repo
@@ -420,7 +422,7 @@ metadata:
   namespace: flux-system
 spec:
   interval: 1m0s
-  targetNamespace: default
+  targetNamespace: josh-app
   sourceRef:
     kind: GitRepository
     name: teamchikynbitts-repo
