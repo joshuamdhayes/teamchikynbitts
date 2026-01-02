@@ -30,6 +30,17 @@ The project is organized into three distinct layers, each representing a separat
 
 ---
 
+## Architectural Decisions
+
+This environment makes several trade-offs to prioritize **cost-optimization** and **resource efficiency** for a single-node setup:
+
+*   **K3s vs EKS**: We use K3s on a single EC2 instance to avoid the ~$72/month EKS control plane fee. K3s is a highly efficient, production-ready distribution perfect for small clusters.
+*   **Flux vs ArgoCD**: Flux was chosen for its lower memory footprint compared to ArgoCD, which is critical on a `t3.small` (2GB RAM) node.
+*   **Elastic IP vs ALB**: We use an AWS Elastic IP (EIP) combined with `nip.io` magic DNS. This provides a stable public URL for apps while avoiding the ~$18/month cost of an AWS Application Load Balancer.
+*   **Default Ingress (Traefik)**: K3s includes Traefik by default, which we use to handle host-based routing across multiple applications on a single public IP.
+
+---
+
 ## Getting Started
 
 ### Prerequisites

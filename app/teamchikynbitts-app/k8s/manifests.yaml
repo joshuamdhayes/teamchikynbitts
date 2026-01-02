@@ -66,6 +66,8 @@ metadata:
   namespace: default
 spec:
   rules:
+    # Use nip.io for "magic DNS". It resolves any subdomain of <IP>.nip.io to <IP>.
+    # This allows host-based routing without a real Route53 domain or /etc/hosts entries.
     - host: team-app.34.235.5.146.nip.io
       http:
         paths:

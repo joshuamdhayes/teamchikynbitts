@@ -143,8 +143,10 @@ func main() {
 			return err
 		}
 
-		// 5. Elastic IP (Pre-allocate for Stable Access)
-		// We create this *before* the instance so we can pass the IP to the K3s installer
+		// 5. Elastic IP (Stable Public Access)
+		// We use an EIP to ensure the public IP address is static across instance replacements.
+		// This is a cost-effective alternative to an AWS Application Load Balancer (ALB).
+		// While LB costs ~$18/mo, an EIP is $0 while attached to a running instance.
 		eip, err := ec2.NewEip(ctx, "k3s-eip", &ec2.EipArgs{
 			Vpc: pulumi.Bool(true),
 			Tags: pulumi.StringMap{
@@ -234,6 +236,8 @@ curl -sfL https://get.k3s.io | sh -s - --write-kubeconfig-mode 644 --tls-san $PU
 		}
 
 		// 8. Install Flux V2 via Helm
+		// Flux was chosen over ArgoCD to reduce resource consumption on the single t3.small node.
+		// It manages GitOps synchronization by watching the repository for manifest changes.
 		fluxRelease, err := helm.NewRelease(ctx, "flux2", &helm.ReleaseArgs{
 			Chart:   pulumi.String("flux2"),
 			Version: pulumi.String("2.13.0"), // Stable version
@@ -248,8 +252,8 @@ curl -sfL https://get.k3s.io | sh -s - --write-kubeconfig-mode 644 --tls-san $PU
 		}
 
 		// 10. ECR Credentials CronJob
-		// Since we are using K3s, we need to explicitly refresh the ECR token in a Secret
-		// so the Kubelet can pull images. We use a CronJob for this.
+		// K3s needs a way to pull private images from ECR. Since ECR tokens expire every 12 hours,
+		// we deploy a CronJob that refreshes the 'regcred' secret every 6 hours.
 		ecrCronYAML := `apiVersion: v1
 kind: ServiceAccount
 metadata:
