@@ -3,7 +3,7 @@ module teamchikynbitts
 go 1.24.7
 
 require (
-	github.com/pulumi/pulumi-aws/sdk/v6 v6.66.2
+	github.com/pulumi/pulumi-aws/sdk/v6 v6.83.2
 	github.com/pulumi/pulumi-awsx/sdk/v2 v2.22.0
 	github.com/pulumi/pulumi-command/sdk v1.1.3
 	github.com/pulumi/pulumi-kubernetes/sdk/v4 v4.24.1

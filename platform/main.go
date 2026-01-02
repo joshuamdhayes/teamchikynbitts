@@ -4,6 +4,7 @@ import (
 	"strings"
 
 	"github.com/pulumi/pulumi-aws/sdk/v6/go/aws/ec2"
+	"github.com/pulumi/pulumi-aws/sdk/v6/go/aws/iam"
 	ec2x "github.com/pulumi/pulumi-awsx/sdk/v2/go/awsx/ec2"
 	"github.com/pulumi/pulumi-command/sdk/go/command/remote"
 	"github.com/pulumi/pulumi-kubernetes/sdk/v4/go/kubernetes"
@@ -101,23 +102,65 @@ func main() {
 			return err
 		}
 
+		// 4a. IAM Role for ECR Access
+		role, err := iam.NewRole(ctx, "k3s-role", &iam.RoleArgs{
+			AssumeRolePolicy: pulumi.String(`{
+				"Version": "2012-10-17",
+				"Statement": [{
+					"Action": "sts:AssumeRole",
+					"Effect": "Allow",
+					"Principal": {
+						"Service": "ec2.amazonaws.com"
+					}
+				}]
+			}`),
+		})
+		if err != nil {
+			return err
+		}
+
+		_, err = iam.NewRolePolicyAttachment(ctx, "k3s-ecr-attach", &iam.RolePolicyAttachmentArgs{
+			Role:      role.Name,
+			PolicyArn: pulumi.String("arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly"),
+		})
+		if err != nil {
+			return err
+		}
+
+		// Also SSM for Session Manager (Debug access)
+		_, err = iam.NewRolePolicyAttachment(ctx, "k3s-ssm-attach", &iam.RolePolicyAttachmentArgs{
+			Role:      role.Name,
+			PolicyArn: pulumi.String("arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"),
+		})
+		if err != nil {
+			return err
+		}
+
+		instanceProfile, err := iam.NewInstanceProfile(ctx, "k3s-profile", &iam.InstanceProfileArgs{
+			Role: role.Name,
+		})
+		if err != nil {
+			return err
+		}
+
 		// 5. EC2 Instance
-		// Install K3s via UserData
+		// Install K3s via UserData (with IMDSv2 token)
 		userData := `#!/bin/bash
 TOKEN=$(curl -X PUT "http://169.254.169.254/latest/api/token" -H "X-aws-ec2-metadata-token-ttl-seconds: 21600")
 PUBLIC_IP=$(curl -H "X-aws-ec2-metadata-token: $TOKEN" http://169.254.169.254/latest/meta-data/public-ipv4)
 curl -sfL https://get.k3s.io | sh -s - --write-kubeconfig-mode 644 --tls-san $PUBLIC_IP
 `
-		instance, err := ec2.NewInstance(ctx, "k3s-server-v3", &ec2.InstanceArgs{
+		instance, err := ec2.NewInstance(ctx, "k3s-server-v4", &ec2.InstanceArgs{
 			Ami:                      pulumi.String(ubuntu.Id),
 			InstanceType:             pulumi.String("t3.small"),
 			VpcSecurityGroupIds:      pulumi.StringArray{sg.ID()},
 			SubnetId:                 vpc.PublicSubnetIds.Index(pulumi.Int(0)),
+			IamInstanceProfile:       instanceProfile.Name,
 			AssociatePublicIpAddress: pulumi.Bool(true),
 			KeyName:                  keyPair.KeyName,
 			UserData:                 pulumi.String(userData),
 			Tags: pulumi.StringMap{
-				"Name": pulumi.String("k3s-server-v3"),
+				"Name": pulumi.String("k3s-server-v4"),
 			},
 		})
 		if err != nil {
