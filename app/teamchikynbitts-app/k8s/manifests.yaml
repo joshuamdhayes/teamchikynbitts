@@ -66,17 +66,8 @@ metadata:
   namespace: default
 spec:
   rules:
-    - host: team-app.local
+    - host: team-app.44.213.121.222.nip.io
       http:
-        paths:
-          - path: /
-            pathType: Prefix
-            backend:
-              service:
-                name: teamchikynbitts-app
-                port:
-                  number: 80
-    - http:
         paths:
           - path: /
             pathType: Prefix
