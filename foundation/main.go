@@ -52,6 +52,16 @@ func main() {
 			ctx.Export("AccessKeyId-"+resourceName, key.ID())
 			ctx.Export("SecretAccessKey-"+resourceName, key.Secret)
 
+			// Create User Login Profile (Enables Console Access)
+			profile, err := iam.NewUserLoginProfile(ctx, "profile-"+resourceName, &iam.UserLoginProfileArgs{
+				User:                  user.Name,
+				PasswordResetRequired: pulumi.Bool(true),
+			})
+			if err != nil {
+				return err
+			}
+			ctx.Export("ConsolePassword-"+resourceName, profile.Password)
+
 			// Collect user names for group membership
 			userNames = append(userNames, resourceName)
 		}
