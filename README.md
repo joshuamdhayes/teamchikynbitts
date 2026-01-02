@@ -17,9 +17,9 @@ The project is organized into three distinct layers, each representing a separat
 ### 2. `platform/` (Kubernetes Platform)
 **Owner:** Platform Engineers
 **Purpose:** Provisions the "Justin-in-Time" Kubernetes cluster.
--   **EKS:** Defines a cost-effective EKS cluster (`t3.small` nodes).
--   **ArgoCD:** Bootstraps ArgoCD for GitOps deployment.
--   **Networking:** Custom VPC configuration.
+-   **K3s**: Self-managed K3s cluster on a single `t3.small` EC2 instance.
+-   **Flux:** GitOps controller for continuous delivery (replaced ArgoCD).
+-   **Networking**: Custom VPC configuration.
 
 ### 3. `app/` (Application)
 **Owner:** Developers
@@ -80,38 +80,32 @@ When ready to work (and incur costs), spin up the platform.
 ### 3. Access & Verify
 -   **Kubeconfig**: Pulumi will export the kubeconfig. Save it to access the cluster:
     ```bash
-    pulumi stack output kubeconfig > kubeconfig.json
-    export KUBECONFIG=$PWD/kubeconfig.json
+    pulumi stack output kubeconfig --show-secrets > kubeconfig.yaml
+    export KUBECONFIG=$PWD/kubeconfig.yaml
     kubectl get nodes
     ```
--   **ArgoCD**: Access the ArgoCD UI via the LoadBalancer URL provided by `kubectl get svc -n argocd`.
+-   **SSH Access**: Retrieve your private key if needed for debugging:
+    ```bash
+    pulumi stack output privateKey --show-secrets > key.pem
+    chmod 600 key.pem
+    ssh -i key.pem ubuntu@$(pulumi stack output publicIP)
+    ```
+-   **Flux**: Check the status of GitOps sync:
+    ```bash
+    kubectl get kustomizations -n flux-system
+    ```
 
 ---
 
 ## Tear Down & Cost Savings
 
-**IMPORTANT:** This project uses specific AWS resources that cost money (~$0.10/hour for the EKS Control Plane). To avoid unexpected charges, always tear down the platform when you are finished.
-
-### 1. Pre-Destroy Cleanup (Important)
-Kubernetes creates Cloud Resources (like LoadBalancers) that Pulumi might not track directly if created via ArgoCD. To prevent the destroy process from hanging:
-
-1.  **Delete all Services:**
-    ```bash
-    export KUBECONFIG=$PWD/kubeconfig.json
-    kubectl delete svc --all -A
-    ```
-    *Wait 1-2 minutes for AWS ELBs to disappear.*
-
-### 2. Destroy Platform
-Once the LoadBalancers are gone, destroy the cluster:
+**IMPORTANT:** Always tear down the platform when finished to stop the EC2 charges.
 
 ```bash
 cd platform
 pulumi destroy
 ```
-
-### 3. Troubleshooting Hangs
-If `pulumi destroy` fails with `DependencyViolation` errors (usually related to VPC Subnets):
-1.  Go to the **AWS Console > EC2 > Load Balancers**.
-2.  Manually delete any remaining Load Balancers associated with your VPC.
-3.  Run `pulumi destroy` again.
+Unlike EKS, there are no "hidden" LoadBalancers created by AWS for the Control Plane, making teardown much cleaner. However, if your Apps created LoadBalancers, delete them first:
+```bash
+kubectl delete svc --all -A
+```
