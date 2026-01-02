@@ -89,11 +89,13 @@ When ready to work (and incur costs), spin up the platform.
     *This takes ~2-5 minutes.*
 
 ### 3. Access & Verify
--   **Kubeconfig**: Pulumi will export the kubeconfig. Save it to access the cluster:
+-   **Kubeconfig**: We have a script to automatically merge the cluster config into your local `~/.kube/config`:
     ```bash
-    pulumi stack output kubeconfig --show-secrets > kubeconfig.yaml
-    export KUBECONFIG=$PWD/kubeconfig.yaml
-    kubectl get nodes
+    ./scripts/update-kubeconfig.sh
+    # Switch context
+    kubectl config use-context teamchikynbitts
+    # Or use kubectx
+    kubectx teamchikynbitts
     ```
 -   **SSH Access**: Retrieve your private key if needed for debugging:
     ```bash

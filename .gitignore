@@ -3,3 +3,4 @@ platform/kubeconfig.json
 platform/get-app-url.sh
 *.pem
 kubeconfig.yaml
+kubeconfig.*.yaml
