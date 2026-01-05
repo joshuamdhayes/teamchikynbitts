@@ -58,9 +58,18 @@ The foundation layer requires a list of users to generate IAM access. **This fil
 2.  Create a `users.json` file:
     ```json
     [
-      "Joshua Hayes",
-      "Justin Rouse",
-      "Abby Adkins"
+      {
+        "name": "Joshua Hayes",
+        "groups": ["technical", "billing"]
+      },
+      {
+        "name": "Justin Rouse",
+        "groups": ["technical"]
+      },
+      {
+        "name": "Abby Adkins",
+        "groups": ["technical"]
+      }
     ]
     ```
 3.  Deploy the foundation:
@@ -80,16 +89,22 @@ The foundation layer requires a list of users to generate IAM access. **This fil
     3.  **Immediately** set up MFA (Multi-Factor Authentication) under "Security Credentials". We recommend using a Virtual MFA device (authenticator app) or a hardware key.
 
 5.  **AWS CLI MFA Setup**:
-    To use the AWS CLI with MFA without manually managing session tokens, run the following helper script:
-    ```bash
-    ./scripts/setup-mfa-profile.sh
-    ```
-    This script will configure a named profile (`teamchikynbitts`) that automatically prompts for your MFA code and manages temporary credentials.
-    
-    To activate the profile in your current shell:
-    ```bash
-    export AWS_PROFILE=teamchikynbitts
-    ```
+    Since our AWS account enforces MFA for all actions, you need to generate a temporary session token to use the CLI. We provide a helper script to make this easy.
+
+    **Prerequisite**: Ensure you have saved your **MFA Device ARN** (found in IAM -> Security Credentials). It looks like `arn:aws:iam::123456789:mfa/DeviceName`.
+
+    **To Login:**
+    1.  Run the login script:
+        ```bash
+        ./foundation/scripts/aws-login.sh <YOUR_6_DIGIT_CODE>
+        ```
+        *(First time run will ask for your MFA Device ARN and cache it).*
+    2.  Copy and Paste the `export` commands output by the script into your terminal.
+    3.  Verify access:
+        ```bash
+        aws s3 ls
+        ```
+    *Note: The session token is valid for 12 hours. You will need to repeat this process when it expires.*
 
     #### Using ECR (Registry)
     To push images to the shared registry:
