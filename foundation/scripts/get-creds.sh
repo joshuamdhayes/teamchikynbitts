@@ -25,7 +25,7 @@ if [ ! -f "users.json" ]; then
 fi
 
 # Parse users and print credentials
-jq -r '.[]' users.json | while read -r FULL_NAME; do
+jq -r '.[].name' users.json | while read -r FULL_NAME; do
     # Sanitize name to match resource name logic (lowercase, spaces to dashes)
     RESOURCE_NAME=$(echo "$FULL_NAME" | tr '[:upper:]' '[:lower:]' | tr ' ' '-')
     

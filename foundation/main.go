@@ -20,7 +20,13 @@ func main() {
 		if err != nil {
 			return err
 		}
-		var users []string
+
+		type UserConfig struct {
+			Name   string   `json:"name"`
+			Groups []string `json:"groups"`
+		}
+
+		var users []UserConfig
 		if err := json.Unmarshal(fileContent, &users); err != nil {
 			return err
 		}
@@ -35,11 +41,37 @@ func main() {
 			return err
 		}
 
-		var userNames []string
+		// Define Group Policies (Name -> Policy ARN)
+		groupPolicies := map[string]string{
+			"technical": "arn:aws:iam::aws:policy/AdministratorAccess", // Replaces old "sysadmins"
+			"billing":   "arn:aws:iam::aws:policy/job-function/Billing",
+		}
 
-		for _, name := range users {
+		iamGroups := make(map[string]*iam.Group)
+
+		// Create Functional Groups
+		for groupName, policyArn := range groupPolicies {
+			g, err := iam.NewGroup(ctx, groupName, &iam.GroupArgs{
+				Name: pulumi.String(groupName),
+			})
+			if err != nil {
+				return err
+			}
+			iamGroups[groupName] = g
+
+			// Attach Policy
+			_, err = iam.NewGroupPolicyAttachment(ctx, groupName+"-policy", &iam.GroupPolicyAttachmentArgs{
+				Group:     g.Name,
+				PolicyArn: pulumi.String(policyArn),
+			})
+			if err != nil {
+				return err
+			}
+		}
+
+		for _, userCfg := range users {
 			// Sanitize name for resource name (spaces to dashes, lowercase)
-			resourceName := strings.ReplaceAll(strings.ToLower(name), " ", "-")
+			resourceName := strings.ReplaceAll(strings.ToLower(userCfg.Name), " ", "-")
 
 			user, err := iam.NewUser(ctx, "user-"+resourceName, &iam.UserArgs{
 				Name: pulumi.String(resourceName), // AWS does NOT allow spaces
@@ -73,8 +105,22 @@ func main() {
 			}
 			ctx.Export("ConsolePassword-"+resourceName, profile.Password)
 
-			// Collect user names for group membership
-			userNames = append(userNames, resourceName)
+			// Collect user names for group membership (for MFA enforcement mainly)
+
+			// Add to Groups defined in JSON
+			for _, gName := range userCfg.Groups {
+				if group, ok := iamGroups[gName]; ok {
+					_, err := iam.NewUserGroupMembership(ctx, "membership-"+resourceName+"-"+gName, &iam.UserGroupMembershipArgs{
+						User: user.Name,
+						Groups: pulumi.StringArray{
+							group.Name,
+						},
+					})
+					if err != nil {
+						return err
+					}
+				}
+			}
 		}
 
 		var botNames []string
@@ -141,35 +187,13 @@ func main() {
 			return err
 		}
 
-		// Create SysAdmins Group
-		group, err := iam.NewGroup(ctx, "sysadmins", &iam.GroupArgs{
-			Name: pulumi.String("sysadmins"),
-		})
-		if err != nil {
-			return err
-		}
-
-		// Add Users to Group
-		for _, uName := range userNames {
-			_, err := iam.NewUserGroupMembership(ctx, "membership-"+uName, &iam.UserGroupMembershipArgs{
-				User: pulumi.String(uName),
-				Groups: pulumi.StringArray{
-					group.Name,
-				},
-			})
-			if err != nil {
-				return err
-			}
-		}
-
-		// Attach Administrator Access to Group
-		_, err = iam.NewGroupPolicyAttachment(ctx, "admin-access", &iam.GroupPolicyAttachmentArgs{
-			Group:     group.Name,
-			PolicyArn: pulumi.String("arn:aws:iam::aws:policy/AdministratorAccess"),
-		})
-		if err != nil {
-			return err
-		}
+		// Note: "sysadmins" group is replaced by "technical" group logic above.
+		// However, we still need to attach MFA enforcement to these users.
+		// We can attach it to the "technical" group or iterate users.
+		// The original code created a "sysadmins" group and put everyone in it.
+		// Since we now have split groups, we should probably ensure MFA is enforced on 'technical' users at least.
+		// Better yet, let's create a "common-users" group or just attach MFA to "technical".
+		// For now, let's attach MFA enforcement to the "technical" group as that covers all users currently.
 
 		// Set Account Password Policy
 		_, err = iam.NewAccountPasswordPolicy(ctx, "password-policy", &iam.AccountPasswordPolicyArgs{
@@ -254,13 +278,15 @@ func main() {
 			return err
 		}
 
-		// Attach MFA Policy to Group
-		_, err = iam.NewGroupPolicyAttachment(ctx, "mfa-enforcement-attach", &iam.GroupPolicyAttachmentArgs{
-			Group:     group.Name,
-			PolicyArn: mfaPolicy.Arn,
-		})
-		if err != nil {
-			return err
+		// Attach MFA Policy to ALL functional Groups
+		for name, g := range iamGroups {
+			_, err = iam.NewGroupPolicyAttachment(ctx, "mfa-enforcement-attach-"+name, &iam.GroupPolicyAttachmentArgs{
+				Group:     g.Name,
+				PolicyArn: mfaPolicy.Arn,
+			})
+			if err != nil {
+				return err
+			}
 		}
 
 		// Create Budget Alert: $50
