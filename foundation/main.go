@@ -41,6 +41,19 @@ func main() {
 			return err
 		}
 
+		// Read config from file
+		type Config struct {
+			BudgetNotificationEmail string `json:"budget_notification_email"`
+		}
+		configContent, err := os.ReadFile("config.json")
+		if err != nil {
+			return err
+		}
+		var config Config
+		if err := json.Unmarshal(configContent, &config); err != nil {
+			return err
+		}
+
 		// Define Group Policies (Name -> Policy ARN)
 		groupPolicies := map[string]string{
 			"technical": "arn:aws:iam::aws:policy/AdministratorAccess", // Replaces old "sysadmins"
@@ -302,14 +315,14 @@ func main() {
 					Threshold:                pulumi.Float64(80), // Alert at 80% ($40)
 					ThresholdType:            pulumi.String("PERCENTAGE"),
 					NotificationType:         pulumi.String("ACTUAL"),
-					SubscriberEmailAddresses: pulumi.StringArray{pulumi.String("admin@example.com")},
+					SubscriberEmailAddresses: pulumi.StringArray{pulumi.String(config.BudgetNotificationEmail)},
 				},
 				&budgets.BudgetNotificationArgs{
 					ComparisonOperator:       pulumi.String("GREATER_THAN"),
 					Threshold:                pulumi.Float64(100), // Alert at 100% ($50)
 					ThresholdType:            pulumi.String("PERCENTAGE"),
 					NotificationType:         pulumi.String("FORECASTED"), // Forecast to exceed
-					SubscriberEmailAddresses: pulumi.StringArray{pulumi.String("admin@example.com")},
+					SubscriberEmailAddresses: pulumi.StringArray{pulumi.String(config.BudgetNotificationEmail)},
 				},
 			},
 		})
@@ -330,7 +343,7 @@ func main() {
 					Threshold:                pulumi.Float64(100), // Alert at 100% ($75)
 					ThresholdType:            pulumi.String("PERCENTAGE"),
 					NotificationType:         pulumi.String("ACTUAL"),
-					SubscriberEmailAddresses: pulumi.StringArray{pulumi.String("admin@example.com")},
+					SubscriberEmailAddresses: pulumi.StringArray{pulumi.String(config.BudgetNotificationEmail)},
 				},
 			},
 		})

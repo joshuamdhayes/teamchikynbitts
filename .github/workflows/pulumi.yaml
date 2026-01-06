@@ -1,0 +1,167 @@
+# Preview Pulumi changes on PRs, deploy on merge to main
+name: Pulumi Infrastructure
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "foundation/**"
+      - "platform/**"
+  push:
+    branches: [main]
+    paths:
+      - "foundation/**"
+      - "platform/**"
+  workflow_dispatch:
+    inputs:
+      stack:
+        description: "Stack to deploy (foundation or platform)"
+        required: true
+        default: "foundation"
+        type: choice
+        options:
+          - foundation
+          - platform
+
+env:
+  AWS_REGION: us-east-1
+  PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
+
+jobs:
+  detect-changes:
+    runs-on: ubuntu-latest
+    outputs:
+      foundation: ${{ steps.filter.outputs.foundation }}
+      platform: ${{ steps.filter.outputs.platform }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v2
+        id: filter
+        with:
+          filters: |
+            foundation:
+              - 'foundation/**'
+            platform:
+              - 'platform/**'
+
+  foundation-preview:
+    needs: detect-changes
+    if: github.event_name == 'pull_request' && needs.detect-changes.outputs.foundation == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.24"
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      # Create required config files (gitignored)
+      - name: Create config files
+        working-directory: foundation
+        run: |
+          echo '["Placeholder User"]' > users.json
+          echo '["Placeholder Bot"]' > bots.json
+          echo '{"budget_notification_email": "placeholder@example.com"}' > config.json
+
+      - name: Pulumi Preview
+        uses: pulumi/actions@v5
+        with:
+          command: preview
+          stack-name: dev
+          work-dir: foundation
+          comment-on-pr: true
+
+  foundation-deploy:
+    needs: detect-changes
+    if: github.event_name == 'push' && needs.detect-changes.outputs.foundation == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.24"
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      # Production config from secrets
+      - name: Create config files from secrets
+        working-directory: foundation
+        run: |
+          echo '${{ secrets.USERS_JSON }}' > users.json
+          echo '${{ secrets.BOTS_JSON }}' > bots.json
+          echo '${{ secrets.FOUNDATION_CONFIG_JSON }}' > config.json
+
+      - name: Pulumi Up
+        uses: pulumi/actions@v5
+        with:
+          command: up
+          stack-name: dev
+          work-dir: foundation
+
+  platform-preview:
+    needs: detect-changes
+    if: github.event_name == 'pull_request' && needs.detect-changes.outputs.platform == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.24"
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Pulumi Preview
+        uses: pulumi/actions@v5
+        with:
+          command: preview
+          stack-name: dev
+          work-dir: platform
+          comment-on-pr: true
+
+  platform-deploy:
+    needs: detect-changes
+    if: github.event_name == 'push' && needs.detect-changes.outputs.platform == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.24"
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Pulumi Up
+        uses: pulumi/actions@v5
+        with:
+          command: up
+          stack-name: dev
+          work-dir: platform

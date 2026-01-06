@@ -1,5 +1,6 @@
 foundation/users.json
 foundation/bots.json
+foundation/config.json
 platform/get-app-url.sh
 *.pem
 kubeconfig.yaml

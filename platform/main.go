@@ -8,7 +8,9 @@ import (
 	ec2x "github.com/pulumi/pulumi-awsx/sdk/v2/go/awsx/ec2"
 	"github.com/pulumi/pulumi-command/sdk/go/command/remote"
 	"github.com/pulumi/pulumi-kubernetes/sdk/v4/go/kubernetes"
+	corev1 "github.com/pulumi/pulumi-kubernetes/sdk/v4/go/kubernetes/core/v1"
 	"github.com/pulumi/pulumi-kubernetes/sdk/v4/go/kubernetes/helm/v3"
+	metav1 "github.com/pulumi/pulumi-kubernetes/sdk/v4/go/kubernetes/meta/v1"
 	"github.com/pulumi/pulumi-kubernetes/sdk/v4/go/kubernetes/yaml"
 	"github.com/pulumi/pulumi-tls/sdk/v4/go/tls"
 	"github.com/pulumi/pulumi/sdk/v3/go/pulumi"
@@ -396,8 +398,24 @@ spec:
 			return err
 		}
 
+		// Create cluster-vars ConfigMap for Flux variable substitution
+		// This allows manifests to use ${PUBLIC_IP} which Flux will replace at reconcile time
+		_, err = corev1.NewConfigMap(ctx, "cluster-vars", &corev1.ConfigMapArgs{
+			Metadata: &metav1.ObjectMetaArgs{
+				Name:      pulumi.String("cluster-vars"),
+				Namespace: pulumi.String("flux-system"),
+			},
+			Data: pulumi.StringMap{
+				"PUBLIC_IP": eip.PublicIp,
+			},
+		}, pulumi.Provider(k8sProvider), pulumi.DependsOn([]pulumi.Resource{fluxRelease}))
+		if err != nil {
+			return err
+		}
+
 		// 10. Flux Kustomizations
 		// App 1: TeamChikynbitts App
+		// postBuild.substituteFrom reads PUBLIC_IP from cluster-vars ConfigMap
 		app1YAML := `apiVersion: kustomize.toolkit.fluxcd.io/v1
 kind: Kustomization
 metadata:
@@ -412,6 +430,10 @@ spec:
   path: "./app/teamchikynbitts-app/k8s"
   prune: true
   wait: true
+  postBuild:
+    substituteFrom:
+      - kind: ConfigMap
+        name: cluster-vars
 `
 
 		// App 2: Josh App
@@ -429,6 +451,10 @@ spec:
   path: "./app/josh-app/k8s"
   prune: true
   wait: true
+  postBuild:
+    substituteFrom:
+      - kind: ConfigMap
+        name: cluster-vars
 `
 		_, err = yaml.NewConfigGroup(ctx, "flux-apps", &yaml.ConfigGroupArgs{
 			YAML: []string{app1YAML, app2YAML},
